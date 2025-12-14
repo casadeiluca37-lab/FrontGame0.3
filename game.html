@@ -2,49 +2,62 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <title>FrontGame - Playable Prototype</title>
+    <title>FrontGame - Battle Royale Prototype</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; }
-        #crosshair {
-            position: absolute;
-            top: 50%; left: 50%;
-            width: 20px; height: 20px;
-            background: transparent;
-            border: 2px solid #00ff00;
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            pointer-events: none; /* Permette di cliccare attraverso il mirino */
-        }
-        #instructions {
+        
+        /* HUD in alto a sinistra (stile Battle Royale) */
+        #hud {
             position: absolute;
             top: 10px; left: 10px;
             color: white;
             font-family: Arial, sans-serif;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0,0,0,0.6);
             padding: 10px;
+            border-radius: 5px;
             pointer-events: none;
+            z-index: 100;
         }
-        #ammo {
+
+        /* Indicatore di interazione (Tasto E) */
+        #interaction-prompt {
+            position: absolute;
+            top: 70%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #FFFF00; /* Giallo brillante */
+            font-size: 24px;
+            font-weight: bold;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px;
+            border-radius: 5px;
+            display: none; /* Nascosto di default */
+            pointer-events: none;
+            z-index: 101;
+        }
+
+        /* Munizioni e Armi */
+        #ammo-display {
             position: absolute;
             bottom: 20px; right: 20px;
             color: #00ff00;
             font-family: Arial, sans-serif;
-            font-size: 24px;
+            font-size: 20px;
             font-weight: bold;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
         }
     </style>
 </head>
 <body>
-    <div id="crosshair"></div>
-    <div id="instructions">
+    <div id="hud">
         <h2>FRONTGAME ALPHA</h2>
-        <p>Clicca per iniziare</p>
-        <p>WASD = Muoviti</p>
-        <p>MOUSE = Guarda</p>
-        <p>CLICK = Spara (Elimina i cubi rossi!)</p>
-        <p>ESC = Pausa</p>
+        <p>Muoviti con WASD. Guarda con il mouse + click.</p>
+        <p>Interagisci con **E**.</p>
+        <p>Spara con **CLICK**.</p>
     </div>
-    <div id="ammo">MUNIZIONI: ∞</div>
+    <div id="interaction-prompt">Premi E per interagire</div>
+    <div id="ammo-display">Arma: Pistola (∞)</div>
 
     <script type="importmap">
         {
@@ -57,176 +70,156 @@
 
     <script type="module">
         import * as THREE from 'three';
-        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js'; // CAMBIATO: Non più PointerLockControls
+        
+        // Setup Base
         let camera, scene, renderer, controls;
-        let raycaster; // Per sparare
-        const objects = []; // Cose da colpire
-        let moveForward = false;
-        let moveBackward = false;
-        let moveLeft = false;
-        let moveRight = false;
-        let canJump = false;
+        let player, playerVelocity = new THREE.Vector3();
+        const objects = []; // Armi, Casse, Bot
+        const playerSpeed = 150;
+        const jumpHeight = 300;
+        const gravity = 9.8 * 100; // Gravità aumentata per sentirsi a terra
+        const playerHeight = 15;
+        let isGrounded = true;
+        
+        // Input Tasti
+        const keys = {};
+        let currentWeapon = { name: "Pistola", damage: 1, range: 100 };
+        const ammoDisplay = document.getElementById('ammo-display');
+        const promptElement = document.getElementById('interaction-prompt');
 
-        let prevTime = performance.now();
-        const velocity = new THREE.Vector3();
-        const direction = new THREE.Vector3();
+        // Audio
+        let listener, sound, audioLoader;
+
+        // Bot e IA Semplice
+        const bots = [];
+        const botSpeed = 50;
+        const botHealth = 3;
 
         init();
         animate();
 
         function init() {
-            // 1. La Scena
+            // 1. SCENA E AUDIO
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x87CEEB); // Cielo azzurro
-            scene.fog = new THREE.Fog(0x87CEEB, 0, 750);
+            scene.background = new THREE.Color(0x1a1a1a); // Sfondo scuro Battle Royale
+            scene.fog = new THREE.Fog(0x1a1a1a, 10, 500);
 
-            // 2. Luci (Sole)
-            const light = new THREE.HemisphereLight(0xeeeeff, 0x777788, 0.75);
-            light.position.set(0.5, 1, 0.75);
-            scene.add(light);
-
-            // 3. Camera (Occhi del giocatore)
+            listener = new THREE.AudioListener();
+            
+            // 2. CAMERA (TERZA PERSONA)
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
-            camera.position.y = 10;
+            camera.position.set(0, 50, 50);
+            camera.add(listener); // Collega il listener audio alla camera
 
-            // 4. Controlli (FPS stile Fortnite)
-            controls = new PointerLockControls(camera, document.body);
-
-            const instructions = document.getElementById('instructions');
-
-            document.addEventListener('click', function () {
-                controls.lock();
-            });
-
-            controls.addEventListener('lock', function () {
-                instructions.style.display = 'none';
-            });
-
-            controls.addEventListener('unlock', function () {
-                instructions.style.display = 'block';
-            });
-
-            scene.add(controls.getObject());
-
-            // 5. Movimento Tasti
-            const onKeyDown = function (event) {
-                switch (event.code) {
-                    case 'ArrowUp': case 'KeyW': moveForward = true; break;
-                    case 'ArrowLeft': case 'KeyA': moveLeft = true; break;
-                    case 'ArrowDown': case 'KeyS': moveBackward = true; break;
-                    case 'ArrowRight': case 'KeyD': moveRight = true; break;
-                    case 'Space': if (canJump === true) velocity.y += 350; canJump = false; break;
-                }
-            };
-
-            const onKeyUp = function (event) {
-                switch (event.code) {
-                    case 'ArrowUp': case 'KeyW': moveForward = false; break;
-                    case 'ArrowLeft': case 'KeyA': moveLeft = false; break;
-                    case 'ArrowDown': case 'KeyS': moveBackward = false; break;
-                    case 'ArrowRight': case 'KeyD': moveRight = false; break;
-                }
-            };
-
-            document.addEventListener('keydown', onKeyDown);
-            document.addEventListener('keyup', onKeyUp);
-
-            // 6. Sistema di Sparo (Raycaster)
-            raycaster = new THREE.Raycaster();
-            document.addEventListener('mousedown', onShoot); // Quando clicchi, spara
-
-            // 7. Terreno (Pavimento)
-            const floorGeometry = new THREE.PlaneGeometry(2000, 2000, 100, 100);
-            floorGeometry.rotateX(-Math.PI / 2);
-            const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x228B22, wireframe: false }); // Erba verde
-            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-            scene.add(floor);
-
-            // 8. Creiamo ostacoli e nemici (Cubi)
-            const boxGeometry = new THREE.BoxGeometry(20, 20, 20);
-            const boxMaterial = new THREE.MeshPhongMaterial({ color: 0xff4444, flatShading: true }); // Rossi = nemici
-
-            for (let i = 0; i < 50; i++) {
-                const box = new THREE.Mesh(boxGeometry, boxMaterial);
-                box.position.x = Math.floor(Math.random() * 20 - 10) * 20;
-                box.position.y = Math.floor(Math.random() * 20) * 20 + 10;
-                box.position.z = Math.floor(Math.random() * 20 - 10) * 20;
-                scene.add(box);
-                objects.push(box); // Aggiungiamo alla lista di cose colpibili
-            }
-
-            // Renderer
+            // 3. RENDERER
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
+            // 4. CONTROLLI (ORBITA / TERZA PERSONA)
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, playerHeight, 0); // La telecamera segue il giocatore
+            controls.minDistance = 20;
+            controls.maxDistance = 100;
+            controls.enablePan = false;
+            controls.maxPolarAngle = Math.PI / 2.2; // Limita l'angolo per non andare sotto il terreno
+            controls.update();
+
+            // 5. PLAYER (Personaggio Visibile)
+            const playerGeometry = new THREE.CapsuleGeometry(5, 10, 4, 8);
+            const playerMaterial = new THREE.MeshPhongMaterial({ color: 0x0078f2 }); // Blu Epic
+            player = new THREE.Mesh(playerGeometry, playerMaterial);
+            player.position.y = playerHeight;
+            scene.add(player);
+            controls.target = player.position; // La telecamera segue il Player
+
+            // 6. LUCI
+            const ambientLight = new THREE.AmbientLight(0x404040, 5); // Luce ambiente scura
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 2); // Luce Direzionale (Sole)
+            directionalLight.position.set(100, 200, 100);
+            scene.add(directionalLight);
+
+            // 7. TERRENO (Erba/Mappa)
+            const floorGeometry = new THREE.PlaneGeometry(1000, 1000, 10, 10);
+            floorGeometry.rotateX(-Math.PI / 2);
+            const floorMaterial = new THREE.MeshPhongMaterial({ color: 0x38761d }); // Verde scuro militare
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.name = 'floor';
+            scene.add(floor);
+            objects.push(floor);
+
+            // 8. Oggetti Interattivi: Casse e Armi
+            spawnObjects();
+            spawnBots(5); // Creiamo 5 bot nemici
+
+            // 9. EVENTI TASTIERA
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            document.addEventListener('mousedown', onShoot);
             window.addEventListener('resize', onWindowResize);
+            
+             // Inizializza l'AudioLoader
+            audioLoader = new THREE.AudioLoader();
         }
 
-        function onShoot() {
-            if (!controls.isLocked) return;
-
-            // Spara un raggio dal centro dello schermo
-            raycaster.setFromCamera(new THREE.Vector2(), camera);
-            const intersects = raycaster.intersectObjects(objects);
-
-            if (intersects.length > 0) {
-                // Se colpiamo un oggetto
-                const hitObject = intersects[0].object;
-                hitObject.material.color.set(0xffff00); // Diventa giallo
-                
-                // Rimuovilo dopo 100ms
-                setTimeout(() => {
-                    scene.remove(hitObject);
-                    // Rimuovilo anche dall'array objects
-                    const index = objects.indexOf(hitObject);
-                    if (index > -1) objects.splice(index, 1);
-                }, 100);
+        function onKeyDown(event) {
+            keys[event.key.toUpperCase()] = true;
+            if (event.key.toUpperCase() === 'E') {
+                interact();
             }
         }
 
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+        function onKeyUp(event) {
+            keys[event.key.toUpperCase()] = false;
         }
 
-        function animate() {
-            requestAnimationFrame(animate);
+        // --- FUNZIONALITA' GIOCO ---
 
-            const time = performance.now();
-
-            if (controls.isLocked === true) {
-                const delta = (time - prevTime) / 1000;
-
-                velocity.x -= velocity.x * 10.0 * delta;
-                velocity.z -= velocity.z * 10.0 * delta;
-                velocity.y -= 9.8 * 100.0 * delta; // Gravità
-
-                direction.z = Number(moveForward) - Number(moveBackward);
-                direction.x = Number(moveRight) - Number(moveLeft);
-                direction.normalize();
-
-                if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
-                if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
-
-                controls.moveRight(-velocity.x * delta);
-                controls.moveForward(-velocity.z * delta);
-
-                controls.getObject().position.y += (velocity.y * delta); // Salto
-
-                if (controls.getObject().position.y < 10) {
-                    velocity.y = 0;
-                    controls.getObject().position.y = 10;
-                    canJump = true;
-                }
+        function spawnObjects() {
+            // 1. Armi a terra
+            for (let i = 0; i < 3; i++) {
+                const weaponGeometry = new THREE.CylinderGeometry(1, 1, 15, 10);
+                const weaponMaterial = new THREE.MeshPhongMaterial({ color: 0x8800ff }); // Viola = Rara
+                const weapon = new THREE.Mesh(weaponGeometry, weaponMaterial);
+                weapon.position.set(Math.random() * 200 - 100, 7.5, Math.random() * 200 - 100);
+                weapon.rotation.z = Math.PI / 2;
+                weapon.userData = { type: 'weapon', name: 'Fucile_Assalto', pickup: true };
+                scene.add(weapon);
+                objects.push(weapon);
             }
 
-            prevTime = time;
-            renderer.render(scene, camera);
+            // 2. Casse del Tesoro
+            for (let i = 0; i < 2; i++) {
+                const chestGeometry = new THREE.BoxGeometry(10, 10, 10);
+                const chestMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00 }); // Giallo = Cassa
+                const chest = new THREE.Mesh(chestGeometry, chestMaterial);
+                chest.position.set(Math.random() * 300 - 150, 5, Math.random() * 300 - 150);
+                chest.userData = { type: 'chest', open: false };
+                scene.add(chest);
+                objects.push(chest);
+            }
         }
-    </script>
-</body>
-</html>
+        
+        function spawnBots(count) {
+            const botGeometry = new THREE.CapsuleGeometry(5, 10, 4, 8);
+            const botMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 }); // Rosso = Nemico
+            
+            for(let i=0; i<count; i++) {
+                const bot = new THREE.Mesh(botGeometry, botMaterial);
+                bot.position.set(Math.random() * 400 - 200, playerHeight, Math.random() * 400 - 200);
+                bot.userData = { type: 'bot', health: botHealth, target: player.position };
+                scene.add(bot);
+                bots.push(bot);
+            }
+        }
+
+        function playShootSound() {
+            // Tenta di caricare un suono. Se non disponibile, crea un beep semplice.
+            if (!sound) {
+                sound = new THREE.Audio(listener);
+                // Usiamo un suono placeholder di un beep semplice (non un file)
+                audioLoader.load('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAA//QDEAAAAAFhEAAAACAAAABVpZDM0AAAAA5cAAAAAAAACAAABUmlmMDAwMDc1MDBpbWZlZzAAAAAAAAAAAAAAAAP/7yIAAPk+6qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqs'''
+            
