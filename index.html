@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FrontGame | Official Site</title>
+    <style>
+        :root {
+            --epic-blue: #0078f2;
+            --epic-hover: #0056b3;
+            --bg-dark: #121212;
+            --bg-card: #202020;
+            --text-main: #f5f5f5;
+            --text-sub: #ccc;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+        }
+
+        /* NAVBAR STILE EPIC */
+        nav {
+            background-color: #2a2a2a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 2rem;
+            height: 60px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text-sub);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: white;
+        }
+
+        .download-btn {
+            background-color: var(--epic-blue);
+            color: white;
+            padding: 0.5rem 1.5rem;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            transition: background 0.3s;
+        }
+
+        .download-btn:hover {
+            background-color: var(--epic-hover);
+        }
+
+        /* HERO SECTION (LA PARTE GRANDE IN ALTO) */
+        .hero {
+            height: 80vh;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.3), #121212), 
+                        url('https://images.unsplash.com/photo-1542751371-adc38448a05e?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'); /* Immagine Placeholder Gaming */
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-start;
+            padding-left: 5%;
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            margin: 0;
+            text-shadow: 2px 2px 10px rgba(0,0,0,0.8);
+            font-style: italic;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            max-width: 600px;
+            margin-bottom: 2rem;
+            color: #ddd;
+        }
+
+        .hero-btn {
+            background-color: white;
+            color: black;
+            padding: 1rem 3rem;
+            font-size: 1rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .hero-btn:hover {
+            transform: scale(1.05);
+        }
+
+        /* GRIGLIA NEWS / CARTE */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 3rem 1rem;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid var(--epic-blue);
+            padding-left: 1rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background-color: var(--bg-card);
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+        }
+
+        .card-img {
+            height: 200px;
+            background-color: #333;
+            background-size: cover;
+            background-position: center;
+        }
+        
+        /* Immagini placeholder per le card */
+        .img-1 { background-image: url('https://images.unsplash.com/photo-1552820728-8b83bb6b773f?auto=format&fit=crop&w=500&q=60'); }
+        .img-2 { background-image: url('https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=500&q=60'); }
+        .img-3 { background-image: url('https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=500&q=60'); }
+
+        .card-content {
+            padding: 1.5rem;
+        }
+
+        .card-tag {
+            font-size: 0.7rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .card h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.2rem;
+        }
+
+        .card p {
+            color: #aaa;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        /* FOOTER */
+        footer {
+            background-color: #2a2a2a;
+            padding: 3rem 1rem;
+            text-align: center;
+            margin-top: 4rem;
+            font-size: 0.8rem;
+            color: #777;
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.5rem; }
+            nav { padding: 0 1rem; }
+            .nav-links { display: none; } /* Nascondiamo i link su mobile per semplicità */
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="logo">FRONTGAME</div>
+        <div class="nav-links">
+            <a href="#">Store</a>
+            <a href="#">Notizie</a>
+            <a href="#">FAQ</a>
+            <a href="#">Aiuto</a>
+            <a href="#">Unreal Engine 5</a>
+        </div>
+        <a href="#" class="download-btn">SCARICA</a>
+    </nav>
+
+    <section class="hero">
+        <h1>BATTLE ROYALE EVOLUTO</h1>
+        <p>Unisciti a FrontGame. Grafica Next-Gen, meccaniche di costruzione avanzate e un mondo in continua evoluzione. Il futuro è ora.</p>
+        <button class="hero-btn" onclick="alert('Download presto disponibile!')">GIOCA ORA GRATIS</button>
+    </section>
+
+    <div class="container">
+        <div class="section-title">Ultime Notizie</div>
+        
+        <div class="grid">
+            <div class="card">
+                <div class="card-img img-1"></div>
+                <div class="card-content">
+                    <span class="card-tag">AGGIORNAMENTO V.1.0</span>
+                    <h3>Nuova Mappa: Cyber City</h3>
+                    <p>Esplora i grattacieli al neon e combatti nei vicoli stretti della nuova mappa futuristica.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-img img-2"></div>
+                <div class="card-content">
+                    <span class="card-tag">EVENTO</span>
+                    <h3>Torneo Mondiale</h3>
+                    <p>Partecipa alle qualificazioni per il primo torneo ufficiale di FrontGame. Montepremi epico.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-img img-3"></div>
+                <div class="card-content">
+                    <span class="card-tag">SKIN</span>
+                    <h3>Battle Pass Stagione 1</h3>
+                    <p>Sblocca oltre 100 ricompense esclusive, incluse le nuove skin leggendarie "Shadow".</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2024 FrontGame Studios. Tutti i diritti riservati.</p>
+        <p>Questa è una fan simulation a scopo educativo.</p>
+    </footer>
+
+</body>
+</html>
